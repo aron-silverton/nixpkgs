@@ -71,10 +71,10 @@ in
 , rapidcheck
 , Security
 , sqlite
+, pkgsBuildBuild
 , util-linuxMinimal
 , xz
-
-, enableDocumentation ? !atLeast24 || stdenv.hostPlatform == stdenv.buildPlatform
+, enableDocumentation ? stdenv.buildPlatform.canExecute stdenv.hostPlatform
 , enableStatic ? stdenv.hostPlatform.isStatic
 , withAWS ? !enableStatic && (stdenv.isLinux || stdenv.isDarwin), aws-sdk-cpp
 , withLibseccomp ? lib.meta.availableOn stdenv.hostPlatform libseccomp, libseccomp
@@ -88,6 +88,13 @@ in
 , runCommand
 , pkgs
 }: let
+
+  # perl (dependency of git/man) doesn't build on pkgsStatic, but since it's just used for tests, we can ignore it
+installCheckInputs = lib.optional atLeast221
+    (if stdenv.hostPlatform.isStatic then pkgsBuildBuild.git else git)
+++ lib.optional atLeast219
+    (if stdenv.hostPlatform.isStatic then pkgsBuildBuild.man else man)
+;
 self = stdenv.mkDerivation {
   pname = "nix";
 
@@ -105,6 +112,8 @@ self = stdenv.mkDerivation {
   hardeningDisable = [
     "shadowstack"
   ] ++ lib.optional stdenv.hostPlatform.isMusl "fortify";
+
+  inherit installCheckInputs;
 
   nativeBuildInputs = [
     pkg-config
@@ -156,11 +165,6 @@ self = stdenv.mkDerivation {
     aws-sdk-cpp
   ];
 
-  installCheckInputs = lib.optionals atLeast221 [
-    git
-  ] ++ lib.optionals atLeast219 [
-    man
-  ];
 
   propagatedBuildInputs = [
     boehmgc
@@ -247,6 +251,10 @@ self = stdenv.mkDerivation {
   # See https://github.com/NixOS/nix/issues/5687
   + lib.optionalString (atLeast25 && stdenv.isDarwin) ''
     echo "exit 99" > tests/gc-non-blocking.sh
+  '' + ''
+    export PATH=$PATH:${lib.makeBinPath installCheckInputs}
+    ls -la $man/share/man
+    export MANPATH=$man/share/man:$MANPATH
   '';
 
   separateDebugInfo = stdenv.isLinux && (atLeast24 -> !enableStatic);
