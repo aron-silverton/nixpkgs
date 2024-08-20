@@ -32,6 +32,12 @@ in stdenv.mkDerivation (finalAttrs: {
 
   postUnpack = "sourceRoot=$sourceRoot/${lib.optionalString atLeast224 "src"}/perl";
 
+  # TODO: Remove this once the nix build also uses meson
+  postPatch = ''
+    sed -i -e "s|config-util.hh|nix/config.h|" lib/Nix/Store.xs
+    sed -i -e "s|config-store.hh|nix/config.h|" lib/Nix/Store.xs
+  '';
+
   buildInputs = [
     boost
     bzip2
